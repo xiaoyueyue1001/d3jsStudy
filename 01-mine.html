@@ -100,22 +100,25 @@
             }
         ];
 
-        var margin = {
-            top: 20,
+        //画布离屏幕距离
+        const margin = {
+            top: 50,
             right: 50,
             bottom: 50,
             left: 90
         };
 
-        var svgWidth = 1000;
-        var svgHeight = 300;
-
+        //画布大小
+        const svgWidth = 1000;
+        const svgHeight = 400;
 
         //创建各个面的颜色数组
-        var mainColorList = ['#f6e242', '#ebec5b', '#d2ef5f', '#b1d894', '#97d5ad', '#82d1c0', '#70cfd2', '#63c8ce', '#50bab8', '#38a99d'];
-        var topColorList = ['#e9d748', '#d1d252', '#c0d75f', '#a2d37d', '#83d09e', '#68ccb6', '#5bc8cb', '#59c0c6', '#3aadab', '#2da094'];
-        var rightColorList = ['#dfce51', '#d9db59', '#b9d54a', '#9ece7c', '#8ac69f', '#70c3b1', '#65c5c8', '#57bac0', '#42aba9', '#2c9b8f'];
+        const mainColorList = ['#f6e242', '#ebec5b', '#d2ef5f', '#b1d894', '#97d5ad', '#82d1c0', '#70cfd2', '#63c8ce', '#50bab8', '#38a99d'];
+        const topColorList = ['#e9d748', '#d1d252', '#c0d75f', '#a2d37d', '#83d09e', '#68ccb6', '#5bc8cb', '#59c0c6', '#3aadab', '#2da094'];
+        const rightColorList = ['#dfce51', '#d9db59', '#b9d54a', '#9ece7c', '#8ac69f', '#70c3b1', '#65c5c8', '#57bac0', '#42aba9', '#2c9b8f'];
 
+        const angle = 1 / 3 * Math.PI   //倾斜角度
+        const shadowY = 20
         var svg = d3.select('#chart')
             .append('svg')
             .attr('width', svgWidth)
@@ -127,7 +130,7 @@
             .domain([0, d3.max(data, d => d.child.value)])
             .range([svgHeight - margin.top - margin.bottom, 0])
 
-        let yAxis = d3.axisLeft(yLinearScale).ticks(6)
+        let yAxis = d3.axisLeft(yLinearScale).ticks(8)
 
         let yAxisG = svg.append("g")
             .call(yAxis)
@@ -158,15 +161,121 @@
         xAxisG.selectAll('line').remove()
 
         xAxisG.append('path')
-            .attr('d', `M15 0 L0 20 L${svgWidth - margin.left - margin.right - 15} 20L${svgWidth - margin.left - margin.right} 0 Z`)
+            .attr('d', `M${shadowY / Math.tan(angle)} 0 L0 ${shadowY} L${svgWidth - margin.left - margin.right - (shadowY / Math.tan(angle))} ${shadowY}L${svgWidth - margin.left - margin.right} 0 Z`)
             .attr('fill', 'rgb(187,187,187)')
 
         xAxisG.selectAll('text')
             .attr('font-size', '18px')
             .attr('fill', '#646464')
-            .attr('transform', 'translate(0,20)');
+            .attr('transform', `translate(0,${shadowY})`);
 
 
+        let newData = computedData(data)
+
+        let cylinders = svg.selectAll('.g')
+            .data(newData)
+            .enter()
+            .append('g')
+            .on("mouseover", clumnMouseover)
+            .on("mouseout", clumnMouseout)
+            .attr('transform', `translate(${shadowY / Math.tan(angle) / 2},${shadowY})`)
+
+        //画正面的矩形
+        cylinders.append('rect')
+            .attr("class", "transparentPath")
+            .attr('x', d => d.rect.x)
+            .attr('y', svgHeight - margin.bottom)
+            .attr('width', d => d.rect.w)
+            .attr('height', 0)
+            .style('fill', (d, i) => mainColorList[i])
+            .transition()
+            .duration(2500)
+            .attr('y', d => d.rect.y)
+            .attr('height', d => d.rect.h)
+
+        //顶部path
+        cylinders.append('path')
+            .attr("class", "transparentPath")
+            .attr('d', d => `M${d.top.p1.x} ${d.top.p1.y}L${d.top.p2.x} 0${d.top.p2.y}L${d.top.p3.x} ${d.top.p3.y}L${d.top.p4.x} ${d.top.p4.y} Z`)
+            .attr('transform', d => `translate(0,${svgHeight - margin.top - margin.bottom - yLinearScale(d.value)})`)
+            .style('fill', (d, i) => topColorList[i])
+            .transition()
+            .duration(2500)
+            .attr('transform', 'translate(0,0)')
+
+
+        //侧边path
+        cylinders.append('path')
+            .attr("class", "transparentPath")
+            .attr('d', d => `M${d.right.p4.x} ${d.right.p4.y}L${d.right.p3.x} 0${d.right.p3.y}L${d.right.p3.x} ${d.right.p3.y}L${d.right.p4.x} ${d.right.p4.y} Z`)
+            .style('fill', (d, i) => rightColorList[i])
+            .transition()
+            .duration(2500)
+            .attr('d', d => `M${d.right.p1.x} ${d.right.p1.y}L${d.right.p2.x} 0${d.right.p2.y}L${d.right.p3.x} ${d.right.p3.y}L${d.right.p4.x} ${d.right.p4.y} Z`)
+
+
+
+
+        function computedData(data) {
+
+            return data.map(d => {
+                let value = d.child.value
+                let rect = {
+                    x: margin.left + xBandScale(d.letter),
+                    y: margin.top + yLinearScale(d.child.value),
+                    w: xBandScale.bandwidth() * 0.7,
+                    h: svgHeight - margin.top - margin.bottom - yLinearScale(d.child.value)
+                }
+
+                let top = {
+                    p1: {
+                        x: rect.x,
+                        y: rect.y
+                    },
+                    p2: {
+                        x: rect.x + shadowY / Math.tan(angle),
+                        y: rect.y - shadowY
+                    },
+                    p3: {
+                        x: rect.x + shadowY / Math.tan(angle) + rect.w,
+                        y: rect.y - shadowY
+                    },
+                    p4: {
+                        x: rect.x + rect.w,
+                        y: rect.y
+                    }
+                }
+
+                let right = {
+                    p1: {
+                        x: rect.x + rect.w,
+                        y: rect.y
+                    },
+                    p2: {
+                        x: rect.x + + rect.w + shadowY / Math.tan(angle),
+                        y: rect.y - shadowY
+                    },
+                    p3: {
+                        x: rect.x + + rect.w + shadowY / Math.tan(angle),
+                        y: svgHeight - margin.bottom - shadowY
+                    },
+                    p4: {
+                        x: rect.x + rect.w,
+                        y: svgHeight - margin.bottom
+                    }
+                }
+
+                return { value, rect, top, right }
+            })
+        }
+
+        function clumnMouseover(d) {
+            d3.select(this).selectAll(".transparentPath").attr("opacity", 0.8);
+        }
+
+        function clumnMouseout(d) {
+            d3.select(this).selectAll(".transparentPath").attr("opacity", 1);
+        }
 
     </script>
 </body>
